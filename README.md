@@ -27,7 +27,7 @@
 
 **注意：** 本工具是检测后尝试解除静音，不能阻止最初的静音动作，因此仍可能出现短暂声音中断；不能保证所有设备与版本兼容。
 
-> **首发版本：1.00（Git tag `v1.0.0`）**。原命令行工具已完成真实 Windows 防静音实测；托盘版与 EXE 已通过自动化构建、自测，但**尚待完整真实桌面验收**。
+> **当前版本：1.0.1（Git tag `v1.0.1`）**。原命令行工具已完成真实 Windows 防静音实测；托盘版与 EXE 已通过自动化构建、自测；1.0.1 进一步加入冻结 EXE 启动与子进程的模拟验收，但**真实音频防护仍需在用户桌面验证**。
 
 ## ✨ 功能亮点
 
@@ -41,7 +41,7 @@
 
 ## 🚀 快速开始
 
-**系统：Windows 10 / 11 x64。** 前往 [GitHub Releases](https://github.com/DearJIAN/WeType-Audio-Guard/releases/latest)，下载 `WeTypeAudioGuard.exe`，或下载包含校验文件和许可证说明的 `WeTypeAudioGuard-1.00-windows-x64.zip`。
+**系统：Windows 10 / 11 x64。** 前往 [GitHub Releases](https://github.com/DearJIAN/WeType-Audio-Guard/releases/latest)，下载 `WeTypeAudioGuard.exe`，或下载包含校验文件和许可证说明的 `WeTypeAudioGuard-1.0.1-windows-x64.zip`。
 
 1. 关闭先前运行的 `python wetype_audio_guard.py --protect`，避免两个程序同时修改音频会话。
 2. 双击 `WeTypeAudioGuard.exe`，任务栏通知区出现**灰色鲸鱼**（可能在隐藏图标中）。
@@ -98,7 +98,7 @@ python tools\build_windows_exe.py
 - **不读取语音内容，不修改麦克风静音状态**；不更改音量数值、通信设置、系统服务或开机自启项。
 - 无法可靠分辨录音期间的用户主动静音与软件自动静音，存在误解除静音风险；重复静音可能无法持续抵御。
 - CLI 已真实验证 `ldremote.exe`、`wemeetapp.exe` 的播放会话恢复：[现场记录](docs/field-test-2026-11-02.md)。
-- 托盘通过 **36 项自动测试**，EXE 通过 Windows 构建与导入自检；**真实 EXE 播放恢复、设备热插拔、显示缩放及长期运行仍待验证**。
+- 托盘已有 **36 项自动测试**，1.0.1 又补充启动报错与事件去重回归测试；EXE 的 Windows 打包、导入自检及冻结托盘/模拟工作进程验收均纳入构建门禁。**真实 EXE 音频恢复、设备热插拔、显示缩放及长期运行仍待验证**。
 
 ## 🐋 为什么是鲸鱼？
 

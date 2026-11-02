@@ -61,7 +61,7 @@ def show_startup_failure(message):
     stream = getattr(sys, 'stderr', None)
     if stream is not None:
         try:
-            stream.write(message + '\\n')
+            stream.write(message + '\n')
         except (OSError, ValueError):
             pass
 
