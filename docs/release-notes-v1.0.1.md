@@ -7,8 +7,9 @@
 ### 下载
 
 - **`WeTypeAudioGuard.exe`**：单文件便携程序，双击后默认**灰鲸（保护暂停）**。
-- **`WeTypeAudioGuard-1.0.1-windows-x64.zip`**：EXE、SHA-256、README、CHANGELOG、MIT 和第三方许可证全文。
-- **`WeTypeAudioGuard.exe.sha256`**：用于完整性校验。
+- **`WeTypeAudioGuard-1.0.1-windows-x64.zip`**：EXE、README、CHANGELOG、MIT 和第三方许可证全文。
+
+> 为简化下载页，独立的 SHA-256 附件已移除；发行流程仍在内部自动校验文件完整性。原版 ZIP 内含有的可选校验文件作为历史内容保留，无需使用。
 
 ### 修复内容
 
@@ -27,7 +28,7 @@
 
 ⚠️ **仍未在用户真实 Windows 设备上完整验收 EXE 的防静音、设备插拔和长时间运行。** 初次使用请在普通视频/音乐环境测试，不要在重要会议中首次开启。
 
-⚠️ 未签署代码签名证书，Windows 可能显示未知发布者。只从此 GitHub Release 下载并验证 SHA-256；不需要关闭安全防护。
+⚠️ 未签署代码签名证书，Windows 可能显示未知发布者。只从此 GitHub Release 下载；不需要关闭安全防护。
 
 项目自主源码采用 [MIT](https://github.com/DearJIAN/WeType-Audio-Guard/blob/v1.0.1/LICENSE)；第三方组件适用各自许可证，完整说明见 [THIRD_PARTY_NOTICES.md](https://github.com/DearJIAN/WeType-Audio-Guard/blob/v1.0.1/THIRD_PARTY_NOTICES.md)。
 

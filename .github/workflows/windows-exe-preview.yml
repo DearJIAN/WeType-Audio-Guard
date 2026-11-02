@@ -59,4 +59,3 @@ jobs:
           retention-days: 14
           path: |
             dist/WeTypeAudioGuard.exe
-            dist/WeTypeAudioGuard.exe.sha256

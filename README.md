@@ -41,7 +41,7 @@
 
 ## 🚀 快速开始
 
-**系统：Windows 10 / 11 x64。** 前往 [GitHub Releases](https://github.com/DearJIAN/WeType-Audio-Guard/releases/latest)，下载 `WeTypeAudioGuard.exe`，或下载包含校验文件和许可证说明的 `WeTypeAudioGuard-1.0.1-windows-x64.zip`。
+**系统：Windows 10 / 11 x64。** 前往 [GitHub Releases](https://github.com/DearJIAN/WeType-Audio-Guard/releases/latest)，下载 `WeTypeAudioGuard.exe`，或下载包含 README、更新日志与许可证说明的 `WeTypeAudioGuard-1.0.1-windows-x64.zip`。**普通用户无需下载或核对 SHA 文件**。
 
 1. 关闭先前运行的 `python wetype_audio_guard.py --protect`，避免两个程序同时修改音频会话。
 2. 双击 `WeTypeAudioGuard.exe`，任务栏通知区出现**灰色鲸鱼**（可能在隐藏图标中）。
@@ -51,13 +51,9 @@
 
 默认不会开机自启，也不会自动开启保护。**请先在普通视频场景测试，不要在重要会议中第一次启用。**
 
-### 安全提示与校验
+### 安全提示
 
-目前 EXE **未进行代码签名**，Windows 可能显示未知发布者或 SmartScreen 提示。请只从本项目 Release 下载，对照附带 SHA-256 检查文件完整性；不需要关闭安全软件。
-
-```powershell
-Get-FileHash .\WeTypeAudioGuard.exe -Algorithm SHA256
-```
+目前 EXE **未进行代码签名**，Windows 可能显示未知发布者或 SmartScreen 提示。请仅从本项目官方 GitHub Release 下载，不需要关闭安全软件。GitHub Actions 构建时仍会自动执行 SHA-256 一致性校验，普通使用者无需手动校验。
 
 日志只保存在 `%LOCALAPPDATA%\WeTypeAudioGuard\logs`，不上传语音、会议内容或遥测。
 
