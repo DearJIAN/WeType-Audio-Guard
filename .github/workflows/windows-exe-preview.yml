@@ -1,0 +1,62 @@
+name: Windows EXE preview
+
+on:
+  push:
+    branches:
+      - feat/windows-exe
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-exe:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Configure Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-build.txt
+
+      - name: Check unchanged CLI and tray tests
+        shell: pwsh
+        run: |
+          python -m py_compile wetype_audio_guard.py wetype_audio_tray.py tray_runtime.py tray_platform.py tray_windows.py tray_icon.py tools/packaging_entry.py tools/build_windows_exe.py
+          python wetype_audio_guard.py --self-test
+          python -m unittest discover -v
+
+      - name: Create portable Windows executable
+        shell: pwsh
+        run: python tools/build_windows_exe.py
+
+      - name: Verify frozen import smoke test (no audio writes)
+        shell: pwsh
+        run: |
+          $exe = Join-Path $PWD 'dist/WeTypeAudioGuard.exe'
+          if (-not (Test-Path $exe)) { throw 'Missing executable' }
+          $proc = Start-Process -FilePath $exe -ArgumentList '--package-smoke-test' -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw "Frozen import smoke test failed with exit code $($proc.ExitCode)" }
+          $expected = (Get-Content 'dist/WeTypeAudioGuard.exe.sha256' -Raw).Split(' ')[0].Trim().ToUpperInvariant()
+          $actual = (Get-FileHash $exe -Algorithm SHA256).Hash
+          if ($actual -ne $expected) { throw 'SHA256 verification failed' }
+
+      - name: Publish preview binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: WeTypeAudioGuard-Windows-preview
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            dist/WeTypeAudioGuard.exe
+            dist/WeTypeAudioGuard.exe.sha256
