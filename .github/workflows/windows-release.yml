@@ -39,32 +39,6 @@ jobs:
             "skip=false" >> $env:GITHUB_OUTPUT
           }
 
-      - name: Simplify existing v1.0.1 release downloads (one-time)
-        if: steps.release.outputs.skip == 'true'
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if ((Get-Content VERSION -Raw).Trim() -ne '1.0.1') { exit 0 }
-          $releaseData = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/v1.0.1" | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect v1.0.1 release' }
-          foreach ($asset in $releaseData.assets) {
-            if ($asset.name -eq 'WeTypeAudioGuard.exe.sha256') {
-              gh api -X DELETE "repos/$env:GITHUB_REPOSITORY/releases/assets/$($asset.id)"
-              if ($LASTEXITCODE -ne 0) { throw 'Failed to remove standalone checksum attachment' }
-            }
-          }
-          gh release edit v1.0.1 --repo $env:GITHUB_REPOSITORY --notes-file docs/release-notes-v1.0.1.md
-          if ($LASTEXITCODE -ne 0) { throw 'Failed to refresh v1.0.1 release notes' }
-          $updated = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/v1.0.1" | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot verify v1.0.1 release' }
-          $names = @($updated.assets | ForEach-Object { $_.name })
-          if ($names.Count -ne 2 -or $names -notcontains 'WeTypeAudioGuard.exe' -or
-              $names -notcontains 'WeTypeAudioGuard-1.0.1-windows-x64.zip') {
-            throw "Unexpected v1.0.1 assets after cleanup: $($names -join ', ')"
-          }
-          Write-Host 'v1.0.1 downloads now show EXE and ZIP only; existing binaries unchanged.'
-
       - name: Configure Python
         if: steps.release.outputs.skip == 'false'
         uses: actions/setup-python@v5
