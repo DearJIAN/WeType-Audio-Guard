@@ -4,6 +4,14 @@
 
 > **项目阶段：已在一台 Windows 电脑上完成初步实测验证，仍是实验原型。** 目前没有托盘界面、独立 EXE、开机自启、后台服务或自动更新。暂不建议在正式会议中未经测试直接开启保护。
 
+## 项目命名
+
+项目名称保留为 **WeType-Audio-Guard**，意为“微信输入法音频守护工具”：
+
+- **WeType**：微信输入法。
+- **Audio**：音频。
+- **Guard**：守护、防止意外静音。
+
 ## 现象与验证
 
 实测环境中，Windows 的「通信 → 不执行任何操作」已设置，使用独立外置麦克风，Windows 录音机不会造成播放静音；但微信输入法开始语音转文字时，其他播放会话会被直接设为静音，输入结束后自动恢复。2026-11-02 的实测日志详见 [`docs/field-test-2026-11-02.md`](docs/field-test-2026-11-02.md)。
@@ -78,6 +86,17 @@ python .\wetype_audio_guard.py --protect
 - [Microsoft ISimpleAudioVolume::SetMute](https://learn.microsoft.com/en-us/windows/win32/api/audioclient/nf-audioclient-isimpleaudiovolume-setmute)
 - [Microsoft IAudioEndpointVolume::GetMute](https://learn.microsoft.com/en-us/windows/win32/api/endpointvolume/nf-endpointvolume-iaudioendpointvolume-getmute)
 - [pycaw](https://github.com/AndreMiras/pycaw)
-- [wetype-voice-tip](https://github.com/SDS-CC/wetype-voice-tip)：参考其公开的微信输入法录音进程状态检测思路，未复制该项目代码或素材。
+
+## Acknowledgements / 致谢
+
+感谢 **SDS-CC** 公开的 [WeType Voice Tip](https://github.com/SDS-CC/wetype-voice-tip) 项目。该项目采用 [MIT License](https://github.com/SDS-CC/wetype-voice-tip/blob/b9c34c6c2dd46cb1a05f7db19c95c6239ac4bada/LICENSE)，原项目版权署名为 `Copyright (c) 2026 CYCYC-SDS`。
+
+该项目公开了通过 Windows WASAPI 监听 `wetype_update.exe` 麦克风音频会话状态，从而判断微信输入法语音识别开始和结束的方法。WeType Audio Guard 在研发过程中参考了这一技术思路，用于识别语音录入状态，并围绕 Windows 播放应用的意外静音问题实现了诊断及恢复功能；录音状态检测思路的来源应归功于该项目。
+
+本次对照上游提交 [`b9c34c6`](https://github.com/SDS-CC/wetype-voice-tip/tree/b9c34c6c2dd46cb1a05f7db19c95c6239ac4bada) 中的 `poc_mic_monitor.py`、`wetype_voice_tip.py` 及仓库文件清单，核查本仓库源码和全部已跟踪文件，未发现复制上游源码或素材。本项目仅参考上述技术思路；共有的 Windows 接口名称、接口标识符及目标进程名不代表复用了上游特有实现。本仓库未包含上游的图标、音频素材、打包配置或可执行文件。
+
+WeType Voice Tip 的开始/结束提示音是上游功能，WeType Audio Guard 当前未实现提示音功能。两个项目保持独立；此致谢不表示官方合作、授权背书或隶属关系。
+
+上述 MIT 许可证及版权署名属于上游项目，不代表本仓库整体采用 MIT 许可证。若后续实际复制或改编上游源码或素材，应随相应内容保留上游版权与许可声明。
 
 本项目可作为实验原型公开展示和讨论，但目前尚未指定开源许可证；**公开可见不等于授权他人复制、修改或分发**。该工具并非微信输入法官方产品，也尚未经过充分的跨设备与长期稳定性验证。
