@@ -130,6 +130,22 @@ class ComAudio:
             self.initialized = False
 
 
+class _CompleteSession:
+    """Require a playback volume interface instead of silently dropping it."""
+    def __init__(self, session):
+        self._session = session
+
+    def __getattr__(self, name):
+        return getattr(self._session, name)
+
+    @property
+    def SimpleAudioVolume(self):
+        volume = self._session.SimpleAudioVolume
+        if volume is None:
+            raise RuntimeError('Missing playback volume interface')
+        return volume
+
+
 class StrictWindowsAudio(WindowsAudio):
     """Convert the CLI's partial-enumeration warnings into fail-closed snapshots."""
     def _sessions(self, dev):
@@ -143,7 +159,7 @@ class StrictWindowsAudio(WindowsAudio):
             sc2 = control.QueryInterface(self._sc_type)
             if sc2 is None:
                 raise RuntimeError('Incomplete session control')
-            yield self._audio_session(sc2), index
+            yield _CompleteSession(self._audio_session(sc2)), index
 
     def _devices(self, flow):
         for device in super()._devices(flow):
@@ -158,9 +174,12 @@ class StrictWindowsAudio(WindowsAudio):
             recording = False
             for device in self._devices(1):
                 for session, _ in self._sessions(device):
-                    if (int(session.State) == 1 and
-                            self._process_name(session.ProcessId).casefold() == 'wetype_update.exe'):
-                        recording = True
+                    if int(session.State) == 1:
+                        name = self._process_name(session.ProcessId)
+                        if name.startswith('pid:'):
+                            raise RuntimeError('Capture process cannot be inspected')
+                        if name.casefold() == 'wetype_update.exe':
+                            recording = True
             items = self.playback()
         capture = tuple(sorted(self._seen[1]))
         render = tuple(sorted(self._seen[0]))

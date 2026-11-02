@@ -26,11 +26,11 @@
 
 ## Tasks
 
-- [ ] 1. Add failing tests for guard engine safety and lifecycle, implement tray_runtime.py with injectable audio, COM hooks, and clock. Preserve per-recording attempt ledger even after transient errors.
-- [ ] 2. Add failing tests for real Windows mutex isolation, CLI conflict detection, logging, worker pause/shutdown. Implement tray_platform.py and process controller in tray_runtime.py.
-- [ ] 3. Add failing icon/menu tests; implement tray_icon.py and wetype_audio_tray.py, add requirements-tray.txt, install declared dependencies.
-- [ ] 4. Generate and inspect 16/24/32 icon previews, update README and acceptance guide, run CLI baseline checks and full unittest discovery.
-- [ ] 5. Fresh branch review; fix meaningful findings with regression tests; commit, push feat/windows-tray and verify remote source tree, main and visibility.
+- [x] 1. Add failing tests for guard engine safety and lifecycle, implement tray_runtime.py with injectable audio, COM hooks, and clock. Preserve per-recording attempt ledger even after transient errors.
+- [x] 2. Add failing tests for real Windows mutex isolation, CLI conflict detection, logging, worker pause/shutdown. Implement tray_platform.py and process controller in tray_runtime.py.
+- [x] 3. Add failing icon/menu tests; implement tray_icon.py and wetype_audio_tray.py, add requirements-tray.txt, install declared dependencies.
+- [x] 4. Generate and inspect 16/24/32 icon previews, update README and acceptance guide, run CLI baseline checks and full unittest discovery.
+- [x] 5. Fresh branch review; fix meaningful findings with regression tests; commit, push feat/windows-tray and verify remote source tree, main and visibility.
 
 ## Decisions / ledger
 
@@ -39,3 +39,16 @@ Ruling: Contain the audio main worker thread in a spawned child process rather t
 Ruling: Pausing is asynchronous and explicitly shown as pending until the audio worker acknowledges; native calls already entered cannot be revoked. Timeout terminates only the owned child, and state becomes paused/error. Cost: up to the watchdog timeout before pause confirmation for a stuck call.
 
 Ruling: Unchanged CLI cannot honor a new mutex. Detect CLI --protect at start, enable and before each write and refuse tray protection on detection/inspection failure. Document remaining race if CLI starts exactly between inspection and write. Cost: detection is conservative and cannot provide a two-sided lock without changing CLI.
+
+
+## Execution results
+
+Tasks 1–4 complete. Original CLI remains byte-identical; 36 tests pass including spawned-process safety, real Windows mutex, simulated COM ownership and native paused tray smoke. Native audio protection was not run.
+
+Final review: two Important snapshot findings verified and fixed with failing regression tests followed by a green 36-test suite. No Critical findings or deferred minors. Additional availability regression fixed for opaque non-Python processes.
+
+Final: Ruling: Only identified Python processes with unreadable command lines block advisory CLI exclusion; opaque process names cannot be reliably classified without elevation. Document this alongside renamed interpreters and script copies. Cost if wrong: an unidentifiable CLI could be missed, so users must never run both protection modes.
+
+Final: Ruling: Real audio compatibility, device insertion/removal and display scaling remain user acceptance work, as explicitly required. Cost: these outcomes cannot be claimed validated before the user tests them.
+
+Branch implementation and review complete; remote push and byte verification are checked before the final delivery report.

@@ -85,7 +85,9 @@ def cli_protect_running():
             info = process.info
             name = (info.get('name') or '').casefold()
             if not name:
-                return True  # Could be an uninspectable Python process.
+                # Opaque OS processes are common without elevation. Only known
+                # Python processes can be inspected by this advisory check.
+                continue
             if name not in ('python.exe', 'pythonw.exe', 'python', 'python3', 'python3.exe'):
                 continue
             args = info.get('cmdline')

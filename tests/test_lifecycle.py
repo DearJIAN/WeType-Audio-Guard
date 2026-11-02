@@ -154,3 +154,10 @@ class RaceTests(unittest.TestCase):
         wait_for(lambda:not c.snapshot()['pending'])
         self.assertFalse(c.snapshot()['enabled'])
         self.assertEqual(calls.value,0)
+
+class ProcessAvailabilityTests(unittest.TestCase):
+    def test_unidentified_non_python_process_does_not_block_every_enable(self):
+        class Proc:
+            info=dict(name=None,cmdline=None)
+        with patch('psutil.process_iter',return_value=[Proc()]):
+            self.assertFalse(cli_protect_running())
