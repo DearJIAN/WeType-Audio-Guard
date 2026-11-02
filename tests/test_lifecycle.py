@@ -161,3 +161,30 @@ class ProcessAvailabilityTests(unittest.TestCase):
             info=dict(name=None,cmdline=None)
         with patch('psutil.process_iter',return_value=[Proc()]):
             self.assertFalse(cli_protect_running())
+
+class StatusNotificationTests(unittest.TestCase):
+    def test_repeated_idle_snapshots_do_not_repost(self):
+        controller = TrayController(factory=QuietAudio, conflict_check=lambda: False)
+        updates = []
+        controller.on_update = lambda value: updates.append(value)
+        controller._notify_if_changed()
+        controller._notify_if_changed()
+        self.assertEqual(len(updates), 1)
+        controller._state['pending'] = True
+        controller._notify_if_changed()
+        controller._notify_if_changed()
+        self.assertEqual(len(updates), 2)
+        controller._state['pending'] = False
+        controller._notify_if_changed()
+        self.assertEqual(len(updates), 3)
+    def test_failed_refresh_is_retried(self):
+        controller = TrayController(factory=QuietAudio, conflict_check=lambda: False)
+        calls = []
+        def flaky(value):
+            calls.append(value)
+            if len(calls) == 1:
+                raise RuntimeError('simulated refresh failure')
+        controller.on_update = flaky
+        controller._notify_if_changed()
+        controller._notify_if_changed()
+        self.assertEqual(len(calls), 2)

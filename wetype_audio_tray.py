@@ -45,6 +45,27 @@ def build_menu(controller, exit_action):
     )
 
 
+def show_startup_failure(message):
+    """Show errors in windowed EXE builds where sys.stderr may be None."""
+    if getattr(sys, 'frozen', False) and sys.platform == 'win32':
+        try:
+            import ctypes
+            user32 = ctypes.WinDLL('user32', use_last_error=True)
+            user32.MessageBoxW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p,
+                                          ctypes.c_wchar_p, ctypes.c_uint]
+            user32.MessageBoxW.restype = ctypes.c_int
+            user32.MessageBoxW(None, message, 'WeType Audio Guard', 0x10)
+            return
+        except Exception:
+            pass
+    stream = getattr(sys, 'stderr', None)
+    if stream is not None:
+        try:
+            stream.write(message + '\\n')
+        except (OSError, ValueError):
+            pass
+
+
 def main():
     argparse.ArgumentParser(description='WeType Audio Guard Windows tray (starts paused)').parse_args()
     if sys.platform != 'win32':
@@ -86,10 +107,15 @@ def main():
                     handler.close()
                     logger.removeHandler(handler)
             return 0
-    except Exception:
-        # Do not print potentially identifying exception payloads.
-        print('Cannot start tray: another instance may be running, or local setup failed. '
-              'Check dependencies and local log permissions.', file=sys.stderr)
+    except Exception as exc:
+        # Avoid disclosing paths, usernames or raw exception details.
+        already_running = (isinstance(exc, RuntimeError) and
+                           str(exc) == 'Tray is already running in this user session')
+        reason = 'already-running' if already_running else 'startup-failed'
+        logging.getLogger('wetype_audio_guard.tray').error('Startup error: %s', reason)
+        message = ('WeType Audio Guard 已在运行，请检查系统托盘。' if already_running else
+                   'WeType Audio Guard 启动失败。请检查本地日志和依赖。')
+        show_startup_failure(message)
         return 2
 
 

@@ -88,3 +88,24 @@ class NativeTrayTests(unittest.TestCase):
             finally:
                 if process.is_alive(): process.terminate(); process.join()
                 process.close(); parent.close()
+
+class PackagedStartupFailureTests(unittest.TestCase):
+    def test_no_console_does_not_silence_frozen_startup_error(self):
+        import sys
+        from unittest.mock import patch
+        from wetype_audio_tray import show_startup_failure
+        with patch.object(sys, 'frozen', True, create=True), \
+             patch.object(sys, 'stderr', None), \
+             patch('ctypes.WinDLL') as loader:
+            show_startup_failure('Test startup problem')
+            loader.assert_called_once_with('user32', use_last_error=True)
+            loader.return_value.MessageBoxW.assert_called_once()
+    def test_console_version_still_writes_to_stderr(self):
+        import io
+        import sys
+        from unittest.mock import patch
+        from wetype_audio_tray import show_startup_failure
+        output = io.StringIO()
+        with patch.object(sys, 'frozen', False, create=True), patch.object(sys, 'stderr', output):
+            show_startup_failure('Test problem')
+        self.assertIn('Test problem', output.getvalue())

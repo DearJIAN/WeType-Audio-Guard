@@ -255,6 +255,7 @@ class TrayController:
         self._stopped = False
         self._failed = threading.Event()
         self.on_update = None
+        self._last_published = None
 
     def start(self):
         with self._lock:
@@ -278,6 +279,21 @@ class TrayController:
             self._state.update(enabled=bool(enabled), pending=True, ready=False, recording=None)
             self._commands.put((self._revision, bool(enabled)))
         LOG.info('Protection %s requested', 'enable' if enabled else 'pause')
+
+    def _notify_if_changed(self):
+        """Deliver only changed snapshots; avoid continuous idle PostMessage calls."""
+        callback = self.on_update
+        if callback is None:
+            return
+        state = self.snapshot()
+        if state == self._last_published:
+            return
+        try:
+            callback(state)
+        except Exception:
+            LOG.warning('Tray status refresh failed')
+        else:
+            self._last_published = state
 
     @staticmethod
     def _reap(process):
@@ -335,11 +351,7 @@ class TrayController:
                             self._state.update(state, pending=False)
                 if not process.is_alive() or time.monotonic() - last_reply > self.timeout:
                     raise TimeoutError('Audio worker unavailable')
-                if self.on_update:
-                    try:
-                        self.on_update(self.snapshot())
-                    except Exception:
-                        LOG.warning('Tray status refresh failed')
+                self._notify_if_changed()
                 self._closing.wait(.03)
         except Exception:
             self._failed.set()
@@ -360,11 +372,7 @@ class TrayController:
             self._process = None
             with self._lock:
                 self._state.update(enabled=False, pending=False, ready=False, recording=None)
-            if self.on_update:
-                try:
-                    self.on_update(self.snapshot())
-                except Exception:
-                    LOG.warning('Tray final status refresh failed')
+            self._notify_if_changed()
 
     def close(self):
         self._closing.set()

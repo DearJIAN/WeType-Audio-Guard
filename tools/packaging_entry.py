@@ -34,5 +34,8 @@ if __name__ == '__main__':
     multiprocessing.freeze_support()
     if sys.argv[1:] == ['--package-smoke-test']:
         raise SystemExit(package_smoke_test())
+    if sys.argv[1:] == ['--frozen-tray-smoke-test']:
+        from packaging_smoke import run_frozen_smoke
+        raise SystemExit(run_frozen_smoke())
     from wetype_audio_tray import main
     raise SystemExit(main())
