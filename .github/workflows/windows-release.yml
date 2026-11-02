@@ -17,88 +17,103 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - name: Checkout release commit
+      - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Select version and check for existing release
+      - name: Determine version and avoid overwriting releases
         id: release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $version = (Get-Content VERSION -Raw).Trim()
-          if ($version -ne '1.0.0') { throw "Unsupported release version: $version" }
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid VERSION file' }
           $tag = "v$version"
           "tag=$tag" >> $env:GITHUB_OUTPUT
-          $existingTags = @(gh release list --repo $env:GITHUB_REPOSITORY --limit 100 --json tagName --jq '.[].tagName')
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot query releases' }
-          if ($existingTags -contains $tag) {
-            Write-Host "Release $tag exists; never overwrite published assets."
+          $existing = @(gh release list --repo $env:GITHUB_REPOSITORY --limit 100 --json tagName --jq '.[].tagName')
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot query existing releases' }
+          if ($existing -contains $tag) {
+            Write-Host "Release $tag already exists; do not overwrite."
             "skip=true" >> $env:GITHUB_OUTPUT
           } else {
             "skip=false" >> $env:GITHUB_OUTPUT
           }
 
-      - name: Set up Python x64
+      - name: Configure Python
         if: steps.release.outputs.skip == 'false'
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           architecture: x64
 
-      - name: Install dependencies
+      - name: Install build dependencies
         if: steps.release.outputs.skip == 'false'
         shell: pwsh
         run: |
-          python -m pip install --upgrade pip
           python -m pip install -r requirements-build.txt
 
-      - name: Compile and run CLI + tray regression tests
+      - name: Compile and run regression tests
         if: steps.release.outputs.skip == 'false'
         shell: pwsh
         run: |
-          python -m py_compile wetype_audio_guard.py wetype_audio_tray.py tray_runtime.py tray_platform.py tray_windows.py tray_icon.py tools/packaging_entry.py tools/build_windows_exe.py
+          python -m py_compile wetype_audio_guard.py wetype_audio_tray.py tray_runtime.py tray_platform.py tray_windows.py tray_icon.py tools/packaging_entry.py tools/build_windows_exe.py packaging_smoke.py
           python wetype_audio_guard.py --self-test
           python -m unittest discover -v
 
-      - name: Build independent Windows EXE
+      - name: Build one-file Windows EXE
         if: steps.release.outputs.skip == 'false'
         shell: pwsh
         run: python tools/build_windows_exe.py
 
-      - name: Frozen import test and SHA-256 verification (no audio writes)
+      - name: Test actual frozen EXE imports and isolated tray/child lifecycle
         if: steps.release.outputs.skip == 'false'
         shell: pwsh
         run: |
           $exe = Join-Path $PWD 'dist/WeTypeAudioGuard.exe'
-          if (-not (Test-Path $exe)) { throw 'EXE was not generated' }
-          $proc = Start-Process -FilePath $exe -ArgumentList '--package-smoke-test' -PassThru -Wait
-          if ($proc.ExitCode -ne 0) { throw "Frozen import test failed: $($proc.ExitCode)" }
+          if (-not (Test-Path $exe)) { throw 'EXE was not built' }
+          foreach ($flag in @('--package-smoke-test', '--frozen-tray-smoke-test')) {
+            $proc = Start-Process -FilePath $exe -ArgumentList $flag -PassThru
+            if (-not $proc.WaitForExit(90000)) {
+              Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+              throw "EXE smoke test timed out: $flag"
+            }
+            if ($proc.ExitCode -ne 0) { throw "EXE smoke test failed: $flag, exit $($proc.ExitCode)" }
+          }
           $expected = (Get-Content dist/WeTypeAudioGuard.exe.sha256 -Raw).Split(' ')[0].Trim().ToUpperInvariant()
           $actual = (Get-FileHash $exe -Algorithm SHA256).Hash
-          if ($expected -ne $actual) { throw 'SHA256 mismatch' }
+          if ($expected -ne $actual) { throw 'SHA-256 mismatch' }
 
-      - name: Bundle EXE and all applicable notices
+      - name: Bundle full licensing notices with EXE
         if: steps.release.outputs.skip == 'false'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force dist/package | Out-Null
+          $required = @('psutil-BSD-3-Clause.txt', 'Pillow-MIT-CMU.txt', 'pycaw-MIT.txt', 'comtypes-MIT.txt', 'six-MIT.txt', 'pystray-LGPL-3.0.txt', 'GPL-3.0.txt', 'PyInstaller-COPYING.txt')
+          foreach ($file in $required) {
+            if (-not (Test-Path "licenses/$file")) { throw "Missing license $file" }
+          }
+          $version = (Get-Content VERSION -Raw).Trim()
+          $zip = "dist/WeTypeAudioGuard-$version-windows-x64.zip"
+          New-Item -ItemType Directory -Force -Path dist/package | Out-Null
           Copy-Item dist/WeTypeAudioGuard.exe, dist/WeTypeAudioGuard.exe.sha256, README.md, LICENSE, CHANGELOG.md, THIRD_PARTY_NOTICES.md -Destination dist/package
           Copy-Item licenses -Destination dist/package/licenses -Recurse
-          Compress-Archive -Path dist/package/* -DestinationPath dist/WeTypeAudioGuard-1.00-windows-x64.zip -Force
-          if (-not (Test-Path dist/WeTypeAudioGuard-1.00-windows-x64.zip)) { throw 'ZIP was not generated' }
+          Compress-Archive -Path dist/package/* -DestinationPath $zip -Force
+          if (-not (Test-Path $zip)) { throw 'Release ZIP not generated' }
 
-      - name: Publish official GitHub Release
+      - name: Publish GitHub Release and verify assets
         if: steps.release.outputs.skip == 'false'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = 'v1.0.0'
-          gh release create $tag dist/WeTypeAudioGuard.exe dist/WeTypeAudioGuard.exe.sha256 dist/WeTypeAudioGuard-1.00-windows-x64.zip --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'WeType Audio Guard 1.00' --notes-file docs/release-notes-v1.0.0.md --latest
-          if ($LASTEXITCODE -ne 0) { throw 'Release command failed' }
-          $names = @(gh release view $tag --repo $env:GITHUB_REPOSITORY --json assets --jq '.assets[].name')
-          foreach ($item in @('WeTypeAudioGuard.exe', 'WeTypeAudioGuard.exe.sha256', 'WeTypeAudioGuard-1.00-windows-x64.zip')) {
-            if ($names -notcontains $item) { throw "Missing release asset: $item" }
+          $version = (Get-Content VERSION -Raw).Trim()
+          $tag = "v$version"
+          $zip = "dist/WeTypeAudioGuard-$version-windows-x64.zip"
+          $notes = "docs/release-notes-$tag.md"
+          if (-not (Test-Path $notes)) { throw "Missing release notes: $notes" }
+          gh release create $tag dist/WeTypeAudioGuard.exe dist/WeTypeAudioGuard.exe.sha256 $zip --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "WeType Audio Guard $version" --notes-file $notes --latest
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub Release command failed' }
+          $assets = @(gh release view $tag --repo $env:GITHUB_REPOSITORY --json assets --jq '.assets[].name')
+          foreach ($file in @('WeTypeAudioGuard.exe', 'WeTypeAudioGuard.exe.sha256', "WeTypeAudioGuard-$version-windows-x64.zip")) {
+            if ($assets -notcontains $file) { throw "Missing Release asset: $file" }
           }
-          Write-Host "Published $tag, assets: $($names -join ', ')"
+          Write-Host "Published and verified $tag"
