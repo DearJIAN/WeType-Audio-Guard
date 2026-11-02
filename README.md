@@ -1,128 +1,115 @@
-# WeType Audio Guard · 微信输入法语音输入防静音
+<p align="center">
+  <img src="docs/whale-preview.png" width="330" alt="原创小鲸鱼：暂停、启用与异常状态" />
+</p>
 
-一个轻量的 Windows Python 工具，用于观察并尝试恢复微信输入法（WeType）语音输入期间被自动静音的**输出设备及应用播放会话**。支持多应用，而非只针对 Chrome。
+<h1 align="center">🐳 WeType Audio Guard</h1>
+<p align="center"><strong>微信输入法语音输入防静音 · 让其他应用的声音继续播放</strong></p>
+<p align="center">A lightweight Windows utility to restore playback muted during WeType voice dictation.</p>
 
-> **项目阶段：CLI 已在一台 Windows 电脑上完成初步实测验证，仍是实验原型。** 本开发分支 `feat/windows-tray` 新增的托盘原型已通过自动测试，尚待用户真实 Windows 音频验收，未合并到 `main`。没有独立 EXE、开机自启、后台服务或自动更新。暂不建议在正式会议中未经测试直接开启保护。
+<p align="center">
+  <a href="https://github.com/DearJIAN/WeType-Audio-Guard/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/DearJIAN/WeType-Audio-Guard?label=Release"></a>
+  <a href="https://github.com/DearJIAN/WeType-Audio-Guard/actions/workflows/windows-release.yml"><img alt="Windows Build" src="https://github.com/DearJIAN/WeType-Audio-Guard/actions/workflows/windows-release.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/DearJIAN/WeType-Audio-Guard"></a>
+  <a href="https://github.com/DearJIAN/WeType-Audio-Guard/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/DearJIAN/WeType-Audio-Guard/total?label=Downloads"></a>
+  <img alt="Windows 10/11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows">
+</p>
+<p align="center">
+  <a href="https://github.com/DearJIAN/WeType-Audio-Guard/releases/latest"><strong>⬇️ 下载便携 EXE</strong></a>
+  · <a href="CHANGELOG.md">更新日志</a>
+  · <a href="docs/windows-tray-validation.md">验收文档</a>
+</p>
 
-## 项目命名
+## 💡 它解决什么问题？
 
-项目名称保留为 **WeType-Audio-Guard**，意为“微信输入法音频守护工具”：
+部分 Windows 电脑使用微信输入法（WeType）语音转文字时，会把其他应用**直接设为静音**，包括视频、音乐和会议软件；结束录音后声音才恢复。
 
-- **WeType**：微信输入法。
-- **Audio**：音频。
-- **Guard**：守护、防止意外静音。
+**WeType Audio Guard** 监测微信输入法的录音状态，并在用户**主动启用**后，尝试把识别期间意外静音的播放应用恢复正常。它支持多个播放应用，而非只针对 Chrome。
 
-## 现象与验证
+**注意：** 本工具是检测后尝试解除静音，不能阻止最初的静音动作，因此仍可能出现短暂声音中断；不能保证所有设备与版本兼容。
 
-实测环境中，Windows 的「通信 → 不执行任何操作」已设置，使用独立外置麦克风，Windows 录音机不会造成播放静音；但微信输入法开始语音转文字时，其他播放会话会被直接设为静音，输入结束后自动恢复。2026-11-02 的实测日志详见 [`docs/field-test-2026-11-02.md`](docs/field-test-2026-11-02.md)。
+> **首发版本：1.00（Git tag `v1.0.0`）**。原命令行工具已完成真实 Windows 防静音实测；托盘版与 EXE 已通过自动化构建、自测，但**尚待完整真实桌面验收**。
 
-实测通过了**诊断**和**保护**：对 `ldremote.exe`、`wemeetapp.exe` 的输出音频会话观察到静音变化，启用保护后打印了 `[RESTORED]`，使用者确认声音恢复。尚未证明微信输入法内部如何实现静音，也尚未覆盖全部电脑、音频设备和软件。
+## ✨ 功能亮点
 
-## 原理及保护范围
+- 🐳 **原创鲸鱼托盘图标**：灰鲸表示暂停，蓝鲸表示保护启用，异常状态有提示。
+- 🔊 **多应用防意外静音**：检查已建立基线的 Windows 播放设备和应用会话。
+- 🛡️ **默认暂停**：每次启动需要手动「启用保护」；可随时暂停或退出。
+- 🎙️ **录音状态识别**：通过 `wetype_update.exe` 的活跃录音会话检测微信输入法。
+- 🔐 **保守恢复策略**：只处理原本未静音、之后异常静音的会话，每轮每会话最多尝试一次。
+- 🪵 **稳定性与隐私**：单实例、音频子进程、异常后重新建立基线、本地滚动日志。
+- 📦 **独立 Windows EXE**：无需安装 Python / Conda，没有安装器或自动更新。
 
-- 通过 Windows Core Audio / WASAPI 枚举活跃的**输出设备及应用音频会话**，读取静音状态。
-- 通过活跃录音会话中的 `wetype_update.exe` 进程判断微信输入法语音输入是否正在进行；不同 WeType 版本可能使用其他进程名。
-- 默认诊断模式**只读**，不会修改音量。
-- 仅在显式指定 `--protect` 后，尝试恢复语音输入开始前原本未静音、随后在短窗口内被静音的输出设备/会话。每次语音输入，每个会话最多尝试恢复一次。
-- **不控制麦克风静音，不读取语音内容，不上传数据，不修改注册表或开机设置。**
+## 🚀 快速开始
 
-限制：无法完全判断录音窗口内的一次静音是软件自动操作还是用户手动操作，因此仍存在误解除静音的风险；如果应用持续重复静音，保护可能无法维持。外放时还可能增加回声或影响识别准确率。
+**系统：Windows 10 / 11 x64。** 前往 [GitHub Releases](https://github.com/DearJIAN/WeType-Audio-Guard/releases/latest)，下载 `WeTypeAudioGuard.exe`，或下载包含校验文件和许可证说明的 `WeTypeAudioGuard-1.00-windows-x64.zip`。
 
-## 运行（Windows 10 / 11）
+1. 关闭先前运行的 `python wetype_audio_guard.py --protect`，避免两个程序同时修改音频会话。
+2. 双击 `WeTypeAudioGuard.exe`，任务栏通知区出现**灰色鲸鱼**（可能在隐藏图标中）。
+3. 右键鲸鱼 → **启用保护**；等待录音结束并建立稳定基线，图标变为蓝色。
+4. 播放视频/音乐，再使用微信输入法语音输入。右键菜单显示状态与本次恢复次数。
+5. 不需要时右键 **暂停保护**或**退出**。暂停只有在音频工作进程确认后才生效；已进行中的系统调用无法撤回。
 
-需要 Python 3.10+。在 PowerShell 中进入项目目录。若使用 Conda 虚拟环境，**优先使用 `python` 而不是 `py`**，确保使用当前环境的解释器：
+默认不会开机自启，也不会自动开启保护。**请先在普通视频场景测试，不要在重要会议中第一次启用。**
 
-```powershell
-python -c "import sys; print(sys.executable)"
-python -m pip install -r requirements.txt
-python .\wetype_audio_guard.py --self-test
-```
+### 安全提示与校验
 
-### 先诊断（安全、只读）
-
-```powershell
-python .\wetype_audio_guard.py --diagnose
-```
-
-保持程序运行后播放视频，启动微信输入法语音输入；观察 `[VOICE]`、`[MUTE]`、`[WOULD RESTORE]`。按 `Ctrl+C` 停止。
-
-### 再保护（主动修改播放静音状态）
-
-请先在**非正式会议环境**中确认诊断正确：
-
-```powershell
-python .\wetype_audio_guard.py --protect
-```
-
-常见日志：
-
-```text
-[VOICE] WeType recording ON
-[MUTE] wemeetapp.exe (PID ...): ON
-[RESTORED] wemeetapp.exe (PID ...)
-[MUTE] wemeetapp.exe (PID ...): OFF
-[VOICE] WeType recording OFF
-```
-
-用 `Ctrl+C` 结束。程序退出时不会自动重置任何已有声音设置。如语音识别未被检测到，可通过 `--capture-process` 修改录音进程名；轮询间隔及保护窗口也可通过 `--interval`、`--window` 调整。运行 `python .\wetype_audio_guard.py --help` 查看完整参数。
-
-## 使用细节与已知局限
-
-- 请在语音输入开始前启动程序，并留出至少 3 次空闲轮询建立基线（默认约 0.6 秒）。
-- 默认轮询间隔为 0.2 秒，恢复窗口为录音开始后的 2 秒；原先已静音或录音期间新出现的会话不会被恢复。
-- 每次录音周期、每个受影响输出设备或播放会话最多尝试恢复一次；即使恢复失败，也不会在同一周期重试。
-- 读取音频状态失败时跳过本次操作；无法识别最初发出静音命令的进程，不能保证适配全部设备及软件。
-- 旧版源码中的依赖错误提示仍提及 `py`；请以本文命令为准，使用当前环境的 `python` 安装依赖。
-- 本次仓库初始化只运行编译检查、策略自测和导入检查，没有重新开启诊断或保护，也未更改当前音频设备设置；此前 Windows 实测成功结果见实测记录。
-
-## Windows 托盘原型（开发分支，待本机验收）
-
-稳定基线位于 `main`，本节仅适用于 `feat/windows-tray`。原 `wetype_audio_guard.py` 保持不变；托盘复用其策略及 Windows 音频接口，添加保守的快照检查和生命周期管理。
+目前 EXE **未进行代码签名**，Windows 可能显示未知发布者或 SmartScreen 提示。请只从本项目 Release 下载，对照附带 SHA-256 检查文件完整性；不需要关闭安全软件。
 
 ```powershell
-git fetch origin
-git switch feat/windows-tray
+Get-FileHash .\WeTypeAudioGuard.exe -Algorithm SHA256
+```
+
+日志只保存在 `%LOCALAPPDATA%\WeTypeAudioGuard\logs`，不上传语音、会议内容或遥测。
+
+## ⚙️ 从源码运行与打包
+
+安装 Python 3.10+（开发实测环境为 Windows + Python 3.12.11）：
+
+```powershell
+git clone https://github.com/DearJIAN/WeType-Audio-Guard.git
+cd WeType-Audio-Guard
 python -m pip install -r requirements-tray.txt
 python .\wetype_audio_tray.py
 ```
 
-启动后为**灰色小鲸鱼、保护暂停**，暂停时不初始化音频后端、不监测录音、不修改静音。右键菜单：
+保留的 CLI（不带托盘）：
 
-- **启用保护**：明确授权本次运行进行播放静音恢复。等待录音结束及至少 3 次稳定空闲轮询后建立基线；录音中启用不会立刻恢复声音。
-- **暂停保护**：显示“正在暂停中”直到音频进程确认；确认后停止写入并释放音频接口。已进入 Windows 的一次调用无法撤回。
-- **状态及本次成功恢复次数**：菜单打开时刷新；悬浮标题显示状态，蓝鲸表示启用、灰鲸表示暂停，小型黄色标记表示异常。
-- **退出**：停止自己的音频子进程和监督线程，再关闭图标；不回滚或更改现有音频状态。保留启动终端至正常退出。
+```powershell
+python -m pip install -r requirements.txt
+python .\wetype_audio_guard.py --self-test
+python .\wetype_audio_guard.py --diagnose
+# 仅在确定需要修改音频状态时：
+python .\wetype_audio_guard.py --protect
+```
 
-每次启动都暂停。同用户登录会话通过 Windows 命名互斥体限制为一个托盘。**不要同时运行 CLI `--protect`**：托盘在启动、启用及每次恢复前检查 Python CLI 保护进程，发现冲突或已识别的 Python 进程命令行不可读时阻止保护。原 CLI 未改造，无法共享新互斥体；检查与写入之间仍存在极短竞态，不能视为双向强互斥。诊断 CLI 可以同时使用。进程名本身不可读、解释器被重命名或脚本另存为其他名称时，检测可能遗漏，不能据此放心并行运行两个保护程序。
+Windows 本机重新构建 EXE：
 
-音频对象全部在独立子进程的同一工作线程创建、使用及释放；托盘通过纯值快照显示状态。普通设备异常会重连并重建基线。原生调用超过 3 秒无响应时，仅终止本程序拥有的音频子进程，显示错误并保持暂停，需退出托盘后重启；不会自动重新启用。正常启停复用一个监督线程与一个子进程。
+```powershell
+python -m pip install -r requirements-build.txt
+python tools\build_windows_exe.py
+```
 
-日志只写入 `%LOCALAPPDATA%\WeTypeAudioGuard\logs` 的 `tray.log` 与 `audio.log`；每个文件最多 1 MiB，各保留 3 个历史文件（总计约 8 MiB）。记录生命周期、录音状态、恢复计数和固定错误代码，不记录语音、会议内容、PID、设备标识、会话标签或原始异常详情，不上传网络。
+产物为 `dist\WeTypeAudioGuard.exe`。GitHub Actions 在 Windows runner 上运行原 CLI 自测、托盘单元测试、PyInstaller 打包导入自检及 SHA-256 校验；**不会自动触发真实音频保护**。详见 [托盘验收说明](docs/windows-tray-validation.md)。
 
-小鲸鱼由 Pillow 原创绘制，无外部素材。可查看 [16/24/32 像素预览](docs/whale-preview.png)。托盘使用 pystray 0.19.5 的 Windows 消息适配层，固定该版本以避免内部接口漂移。
+## 🔬 原理与安全边界
 
-测试及本机验收见 [Windows 托盘验证说明](docs/windows-tray-validation.md)。本次没有运行真实保护联调；此前 CLI 的真实成功记录仍有效，不能据此认定托盘已完成真实音频验收。
+通过 Windows Core Audio / WASAPI，监听录音会话中的 `wetype_update.exe`，在无录音的稳定状态建立输出静音基线；录音开始后的短窗口内，仅对**此前未静音**而后被静音的既有输出会话尝试 `SetMute(FALSE)`。每次录音每个会话最多恢复一次，异常后重新建立基线。
 
-## 后续计划（尚未实现）
-- 独立 EXE 打包与启动体验
-- 可选开机自启、状态日志和更严格的防误解除静音策略
+- **不读取语音内容，不修改麦克风静音状态**；不更改音量数值、通信设置、系统服务或开机自启项。
+- 无法可靠分辨录音期间的用户主动静音与软件自动静音，存在误解除静音风险；重复静音可能无法持续抵御。
+- CLI 已真实验证 `ldremote.exe`、`wemeetapp.exe` 的播放会话恢复：[现场记录](docs/field-test-2026-11-02.md)。
+- 托盘通过 **36 项自动测试**，EXE 通过 Windows 构建与导入自检；**真实 EXE 播放恢复、设备热插拔、显示缩放及长期运行仍待验证**。
 
-## 技术参考
+## 🐋 为什么是鲸鱼？
 
-- [Microsoft ISimpleAudioVolume::SetMute](https://learn.microsoft.com/en-us/windows/win32/api/audioclient/nf-audioclient-isimpleaudiovolume-setmute)
-- [Microsoft IAudioEndpointVolume::GetMute](https://learn.microsoft.com/en-us/windows/win32/api/endpointvolume/nf-endpointvolume-iaudioendpointvolume-getmute)
-- [pycaw](https://github.com/AndreMiras/pycaw)
+因为项目作者的美丽未婚妻「**鲸鲸**」是一只喜欢深海蓝的小鲸鱼。💙
 
-## Acknowledgements / 致谢
+这只音频守护小鲸鱼由我们共同构思：**鲸鲸提出形象与配色创意，图标使用原创 Pillow 绘制代码实现**。希望它安静地待在你的任务栏里，守护那些不该突然消失的声音。
 
-感谢 **SDS-CC** 公开的 [WeType Voice Tip](https://github.com/SDS-CC/wetype-voice-tip) 项目。该项目采用 [MIT License](https://github.com/SDS-CC/wetype-voice-tip/blob/b9c34c6c2dd46cb1a05f7db19c95c6239ac4bada/LICENSE)，原项目版权署名为 `Copyright (c) 2026 CYCYC-SDS`。
+## 致谢与许可
 
-该项目公开了通过 Windows WASAPI 监听 `wetype_update.exe` 麦克风音频会话状态，从而判断微信输入法语音识别开始和结束的方法。WeType Audio Guard 在研发过程中参考了这一技术思路，用于识别语音录入状态，并围绕 Windows 播放应用的意外静音问题实现了诊断及恢复功能；录音状态检测思路的来源应归功于该项目。
+感谢 [SDS-CC / WeType Voice Tip](https://github.com/SDS-CC/wetype-voice-tip)（MIT，原版权署名 © 2026 CYCYC-SDS）公开了通过 WASAPI 监测 `wetype_update.exe` 录音会话的技术思路。本项目在此基础上**独立实现另一种音频防静音功能**，未复制上游独特代码、图标或提示音素材，也并非微信输入法官方产品。
 
-本次对照上游提交 [`b9c34c6`](https://github.com/SDS-CC/wetype-voice-tip/tree/b9c34c6c2dd46cb1a05f7db19c95c6239ac4bada) 中的 `poc_mic_monitor.py`、`wetype_voice_tip.py` 及仓库文件清单，核查本仓库源码和全部已跟踪文件，未发现复制上游源码或素材。本项目仅参考上述技术思路；共有的 Windows 接口名称、接口标识符及目标进程名不代表复用了上游特有实现。本仓库未包含上游的图标、音频素材、打包配置或可执行文件。
+自主编写的项目源码采用 **[MIT License](LICENSE)**（© 2026 DearJIAN）。打包组件仍适用各自许可，例如 `pystray` 为 LGPLv3；请阅读 [第三方许可声明](THIRD_PARTY_NOTICES.md) 和 [许可原文](licenses/)。项目 MIT 不会覆盖第三方代码。
 
-WeType Voice Tip 的开始/结束提示音是上游功能，WeType Audio Guard 当前未实现提示音功能。两个项目保持独立；此致谢不表示官方合作、授权背书或隶属关系。
-
-上述 MIT 许可证及版权署名属于上游项目，不代表本仓库整体采用 MIT 许可证。若后续实际复制或改编上游源码或素材，应随相应内容保留上游版权与许可声明。
-
-本项目可作为实验原型公开展示和讨论，但目前尚未指定开源许可证；**公开可见不等于授权他人复制、修改或分发**。该工具并非微信输入法官方产品，也尚未经过充分的跨设备与长期稳定性验证。
+[查看版本变更](CHANGELOG.md) · [提出 Issue](https://github.com/DearJIAN/WeType-Audio-Guard/issues) · [下载 Release](https://github.com/DearJIAN/WeType-Audio-Guard/releases)
