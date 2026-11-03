@@ -32,26 +32,44 @@ class SharedAudio:
         assert (value,context)==(0,None)
         with self.calls.get_lock(): self.calls.value+=1
 
-def native_paused_probe(connection, directory):
-    """Full entry smoke test: actual tray, always paused, automatic UI-thread exit."""
+def native_autoenable_probe(connection, directory):
+    """Actual Windows tray with a fake controller: auto-enable, no audio device."""
     import sys
     import threading
     from unittest.mock import patch
     from pathlib import Path
     from tray_windows import WindowsTrayIcon
     import wetype_audio_tray
-    owner=threading.get_ident()
-    observations=[]
+    owner = threading.get_ident()
+    observations = []
+
+    class ProbeController:
+        def __init__(self, log_dir=None):
+            self.state = dict(enabled=False, recording=None, ready=False,
+                              error='', pending=False, restored=0)
+            self.on_update = None
+        def start(self):
+            pass
+        def set_enabled(self, enabled):
+            self.state['enabled'] = bool(enabled)
+        def snapshot(self):
+            return dict(self.state)
+        def close(self):
+            pass
+
     class ProbeIcon(WindowsTrayIcon):
-        def _on_refresh(self,wparam,lparam):
-            super()._on_refresh(wparam,lparam)
-            observations.append((threading.get_ident()==owner,self._latest_state['enabled']))
+        def _on_refresh(self, wparam, lparam):
+            super()._on_refresh(wparam, lparam)
+            observations.append(
+                (threading.get_ident() == owner, self._latest_state['enabled']))
             self.stop()
-    with patch('tray_windows.WindowsTrayIcon',ProbeIcon), \
-         patch('wetype_audio_tray.default_log_dir',lambda:Path(directory)), \
-         patch.object(sys,'argv',['wetype_audio_tray.py']):
-        code=wetype_audio_tray.main()
-    connection.send((code,observations))
+
+    with patch('tray_windows.WindowsTrayIcon', ProbeIcon), \
+         patch('wetype_audio_tray.TrayController', ProbeController), \
+         patch('wetype_audio_tray.default_log_dir', lambda: Path(directory)), \
+         patch.object(sys, 'argv', ['wetype_audio_tray.py']):
+        code = wetype_audio_tray.main()
+    connection.send((code, observations))
     connection.close()
 
 class SlowAudio:

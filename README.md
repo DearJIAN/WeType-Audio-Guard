@@ -109,3 +109,14 @@ python tools\build_windows_exe.py
 自主编写的项目源码采用 **[MIT License](LICENSE)**（© 2026 DearJIAN）。打包组件仍适用各自许可，例如 `pystray` 为 LGPLv3；请阅读 [第三方许可声明](THIRD_PARTY_NOTICES.md) 和 [许可原文](licenses/)。项目 MIT 不会覆盖第三方代码。
 
 [查看版本变更](CHANGELOG.md) · [提出 Issue](https://github.com/DearJIAN/WeType-Audio-Guard/issues) · [下载 Release](https://github.com/DearJIAN/WeType-Audio-Guard/releases)
+
+### 托盘操作（自动启用版测试分支）
+
+新测试版每次启动后**自动请求启用保护**，不用再右键手动开启；如检测到正在运行
+的 CLI 保护或读取异常，仍会安全停止或提示错误。蓝鲸与菜单「✓ 保护已开启」
+表示正在保护；右键仍可手动暂停。此改动**尚未进入 v1.0.1 正式 Release**。
+
+- **查看日志**：打开系统记事本，显示近期合并的 `audio.log` 和 `tray.log`。
+- **复制日志**：一键复制同样的诊断内容，粘贴到聊天即可。日志留在本机，
+  从不自动发送；发送之前请自行检查内容。
+- 保护没有总时长限制；每轮语音开始后的 2 秒恢复窗口是独立计算的。

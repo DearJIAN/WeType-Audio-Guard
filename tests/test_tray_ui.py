@@ -29,22 +29,40 @@ class IconMenuTests(unittest.TestCase):
         self.assertIn('暂停中',status_text(state))
         state.update(pending=False,error='snapshot-failed')
         self.assertIn('错误',status_text(state))
-    def test_menu_does_not_enable_until_explicit_action(self):
+    def test_menu_checked_state_and_log_actions(self):
         self.assertIsNotNone(build_menu, 'Tray menu is not implemented')
         class Controller:
             def __init__(self): self.actions=[]
             def snapshot(self):
                 return dict(enabled=False,recording=None,ready=False,error='',pending=False,restored=0)
             def set_enabled(self,value): self.actions.append(value)
+        from unittest.mock import patch
         c=Controller(); exits=[]
         menu=build_menu(c,lambda *args: exits.append(True))
         self.assertEqual(c.actions,[])
         items=list(menu.items)
         enable=next(item for item in items if item.text=='启用保护')
         pause=next(item for item in items if item.text=='暂停保护')
-        enable(None); pause(None)
+        self.assertFalse(enable.checked)
+        self.assertTrue(enable.enabled)
+        self.assertFalse(pause.enabled)
+        enable(None)
+        self.assertEqual(c.actions,[True])
+        c.snapshot=lambda: dict(enabled=True,recording=False,ready=True,
+                                error='',pending=False,restored=3)
+        self.assertTrue(enable.checked)
+        self.assertFalse(enable.enabled)
+        self.assertTrue(pause.enabled)
+        self.assertTrue(next(it for it in items if '保护已开启' in it.text).text.startswith('✓'))
+        pause(None)
         self.assertEqual(c.actions,[True,False])
-        next(item for item in items if item.text=='退出')(None)
+        with patch('wetype_audio_tray.open_diagnostic_logs') as view, \
+             patch('wetype_audio_tray.copy_diagnostic_logs') as copy:
+            next(it for it in items if it.text=='查看日志')(None)
+            next(it for it in items if it.text=='复制日志')(None)
+            view.assert_called_once()
+            copy.assert_called_once()
+        next(it for it in items if it.text=='退出')(None)
         self.assertEqual(exits,[True])
 
 class WindowsDispatchTests(unittest.TestCase):
@@ -68,13 +86,13 @@ class WindowsDispatchTests(unittest.TestCase):
         self.assertEqual(rendered,[{'enabled':False}])
 
 class NativeTrayTests(unittest.TestCase):
-    def test_full_entry_starts_paused_and_exits_without_child_process(self):
+    def test_full_entry_auto_enables_without_real_audio(self):
         import multiprocessing as mp
         import tempfile
-        from tests.fakes import native_paused_probe
+        from tests.fakes import native_autoenable_probe
         with tempfile.TemporaryDirectory() as directory:
             ctx=mp.get_context('spawn'); parent,child=ctx.Pipe()
-            process=ctx.Process(target=native_paused_probe,args=(child,directory))
+            process=ctx.Process(target=native_autoenable_probe,args=(child,directory))
             try:
                 process.start(); child.close()
                 self.assertTrue(parent.poll(10),'Tray startup did not return')
@@ -84,7 +102,7 @@ class NativeTrayTests(unittest.TestCase):
                 self.assertEqual(process.exitcode,0)
                 self.assertEqual(code,0)
                 self.assertTrue(observations)
-                self.assertTrue(all(on_owner and not enabled for on_owner,enabled in observations))
+                self.assertTrue(all(on_owner and enabled for on_owner,enabled in observations))
             finally:
                 if process.is_alive(): process.terminate(); process.join()
                 process.close(); parent.close()

@@ -1,9 +1,10 @@
-"""Windows tray entry point. Starts paused; no audio writes without opt-in."""
+"""Windows tray entry point. Auto-enables protection on every launch."""
 from __future__ import annotations
 import argparse
 import logging
 import multiprocessing
 import sys
+from tray_logs import copy_diagnostic_logs, open_diagnostic_logs
 from tray_icon import whale_icon
 from tray_platform import SingleInstance, configure_logging, default_log_dir
 from tray_runtime import TrayController
@@ -34,15 +35,50 @@ def status_text(state):
 def build_menu(controller, exit_action):
     import pystray
     item = pystray.MenuItem
+    def active():
+        state = controller.snapshot()
+        return bool(state['enabled']) and not state['pending'] and not state['error']
+
+    def actionable():
+        return not controller.snapshot()['pending']
+
+    def launch_logs(opener):
+        try:
+            opener()
+        except (OSError, RuntimeError, ValueError):
+            logging.getLogger('wetype_audio_guard.tray').warning(
+                'Diagnostic log action failed')
+            show_user_warning('无法查看或复制日志，请检查日志目录。')
+
     return pystray.Menu(
-        item(lambda _: status_text(controller.snapshot()), None, enabled=False),
+        item(lambda _: ('✓ ' if active() else '') + status_text(controller.snapshot()),
+             None, enabled=False),
         item(lambda _: '本次成功恢复：%d 次' % controller.snapshot()['restored'], None, enabled=False),
         pystray.Menu.SEPARATOR,
-        item('启用保护', lambda icon, entry: controller.set_enabled(True)),
-        item('暂停保护', lambda icon, entry: controller.set_enabled(False)),
+        item('启用保护', lambda icon, entry: controller.set_enabled(True),
+             checked=lambda _: active(),
+             enabled=lambda _: actionable() and not controller.snapshot()['enabled']),
+        item('暂停保护', lambda icon, entry: controller.set_enabled(False),
+             enabled=lambda _: actionable() and controller.snapshot()['enabled']),
+        pystray.Menu.SEPARATOR,
+        item('查看日志', lambda icon, entry: launch_logs(open_diagnostic_logs)),
+        item('复制日志', lambda icon, entry: launch_logs(copy_diagnostic_logs)),
         pystray.Menu.SEPARATOR,
         item('退出', exit_action),
     )
+
+
+def show_user_warning(message):
+    """Show a short native warning without disclosing private paths."""
+    if sys.platform == 'win32':
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(
+                None, message, 'WeType Audio Guard', 0x30)
+            return
+        except Exception:
+            pass
+    show_startup_failure(message)
 
 
 def show_startup_failure(message):
@@ -67,7 +103,7 @@ def show_startup_failure(message):
 
 
 def main():
-    argparse.ArgumentParser(description='WeType Audio Guard Windows tray (starts paused)').parse_args()
+    argparse.ArgumentParser(description='WeType Audio Guard Windows tray (auto-enables on start)').parse_args()
     if sys.platform != 'win32':
         print('This tray prototype requires Windows 10/11.', file=sys.stderr)
         return 2
@@ -76,7 +112,7 @@ def main():
         with SingleInstance():
             directory = default_log_dir()
             logger = configure_logging(directory)
-            logger.info('Tray starting paused')
+            logger.info('Tray starting with automatic protection enabled')
             controller = TrayController(log_dir=str(directory))
             icon = WindowsTrayIcon('WeTypeAudioGuard', whale_icon(), 'WeType Audio Guard · 保护已暂停')
             previous = None
@@ -97,6 +133,9 @@ def main():
                 controller.start()
                 def setup(icon):
                     icon.visible = True
+                    # The supervisor checks CLI conflicts before enabling;
+                    # audio must establish a safe idle baseline first.
+                    controller.set_enabled(True)
                     icon.request_refresh(controller.snapshot())
                 icon.run(setup=setup)
             finally:
