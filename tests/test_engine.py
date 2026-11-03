@@ -116,17 +116,27 @@ class EngineTests(unittest.TestCase):
         self.tick()
         self.assertEqual(self.audio.control.calls, 0)
     def test_two_candidate_restores_without_slow_process_enumeration(self):
-        # The validated CLI calls SetMute directly. A simulated expensive
-        # process scan must never enter the recording-time restore loop.
+        # The validated CLI calls SetMute directly. No process scan belongs
+        # in the timing-critical loop, even with multiple affected apps.
         from unittest.mock import patch
+        class TwoAppAudio(Audio):
+            def __init__(self):
+                super().__init__()
+                self.second = Control()
+            def snapshot(self):
+                recording, items, topology = super().snapshot()
+                items['session:second'] = AudioItem(
+                    'session:second', 'second.exe', self.muted, self.second)
+                return recording, items, topology
+        self.audio = TwoAppAudio()
         self.prime()
-        self.audio.extra = True
         self.audio.recording = self.audio.muted = True
-        self.audio.extra = False
         with patch('tray_platform.cli_protect_running',
                    side_effect=AssertionError('Unexpected real-time process scan')) as check:
             self.tick()
         self.assertEqual(self.audio.control.calls, 1)
+        self.assertEqual(self.audio.second.calls, 1)
+        self.assertEqual(self.engine.status()['restored'], 2)
         check.assert_not_called()
 
     def test_post_restore_readback_reports_repeated_muting(self):
@@ -138,9 +148,10 @@ class EngineTests(unittest.TestCase):
             self.assertEqual(self.audio.control.calls, 1)
             # Deliberately leave the fake app muted to mimic re-muting.
             self.tick()
-            messages = [str(call) for call in logger.info.call_args_list]
-        self.assertTrue(any('Restore readback:' in message and
-                            'muted=%d' in message for message in messages))
+            reports = [call.args for call in logger.info.call_args_list
+                       if call.args and str(call.args[0]).startswith('Restore readback:')]
+        self.assertEqual(len(reports), 1)
+        self.assertEqual(reports[0][1:], (0, 1, 0, 'ON'))
         self.assertEqual(self.audio.control.calls, 1)
 
 class PrivacyTests(unittest.TestCase):
