@@ -16,6 +16,7 @@
 
 <p align="center">
   <a href="https://github.com/DearJIAN/WeType-Audio-Guard/releases/latest"><strong>⬇️ 下载 Windows 便携 EXE</strong></a>
+  · <a href="DOWNLOAD.md">下载与签名状态</a>
   · <a href="CHANGELOG.md">更新日志</a>
   · <a href="docs/windows-tray-validation.md">Windows 验收记录</a>
 </p>
@@ -55,6 +56,21 @@
 **声音与隐私提示**：它只可能解除符合条件的播放静音，不修改麦克风静音或全局音量数值。由于无法区分同一恢复窗口内的用户主动静音与微信自动静音，可能误解除静音；请在普通视频场景完成首次测试，正式会议中谨慎使用外放。当前 EXE 没有代码签名，可能被 Windows SmartScreen 提示未知发布者；请仅从官方仓库下载，不要为此关闭安全软件。
 
 日志位于 `%LOCALAPPDATA%\WeTypeAudioGuard\logs`，包含轮询状态、恢复次数及脱敏诊断信息；不采集语音/会议内容，也没有自动遥测。用户主动分享日志前应检查其内容。
+
+## Code signing policy（代码签名政策）
+
+**SignPath 申请进度（2026-11-03）：SignPath Foundation 免费开源代码签名申请已经提交，但仍待审核。现有 v1.1 EXE 没有数字签名。** 它可能触发 Windows SmartScreen「未知发布者」提示。切勿为使用本软件关闭 Windows 安全保护。
+
+官方要求的拟申请服务声明（**仅在项目获批后适用**）：**Free code signing provided by SignPath.io, certificate by SignPath Foundation**。目前这句话不代表 SignPath 已批准项目，更不意味着当前 EXE 已签名。
+
+- **[Code signing policy（完整代码签名政策）](CODE_SIGNING_POLICY.md)**：当前状态、作者、审核者、签名批准者职责和可追溯构建计划。
+- **[Privacy policy（隐私政策）](PRIVACY.md)**：本地音频会话信息、滚动日志、剪贴板操作，无自动上传。
+- **[Download（下载页面）](DOWNLOAD.md)**：v1.1 EXE/ZIP 下载、已完成的真实 EXE 验证与未签名提示。
+- [SignPath application status（申请状态记录）](docs/signpath-application-2026-11-03.md)：申请已提交、尚待审核，未启用签名流程。
+
+**EXE 实测已完成**：作者已在真实 Windows 系统中运行打包版 EXE，确认微信输入法语音录入时声音恢复，之前的工作进程超时错误未再出现；此外还有 46 项 Windows 自动测试。实机验证不等于已获得数字签名，也不等于所有音频设备都兼容。
+
+现有 v1.1 Release 二进制文件与 Git 标签保持不变。若未来签名申请获批，将在验证签名后发布有独立来源记录的新产物，不将已发布的未签名 EXE 冒充为已签名。
 
 ## 技术机制与限制
 
@@ -107,4 +123,4 @@ python tools\build_windows_exe.py
 
 自主编写的项目源码采用 **[MIT License](LICENSE)**（© 2026 DearJIAN）。第三方依赖使用各自许可证（例如 pystray 的 LGPLv3），见 [第三方许可声明](THIRD_PARTY_NOTICES.md) 及 [许可证原文](licenses/)。
 
-[版本变更](CHANGELOG.md) · [问题反馈](https://github.com/DearJIAN/WeType-Audio-Guard/issues) · [正式下载](https://github.com/DearJIAN/WeType-Audio-Guard/releases)
+[版本变更](CHANGELOG.md) · [代码签名政策](CODE_SIGNING_POLICY.md) · [隐私政策](PRIVACY.md) · [问题反馈](https://github.com/DearJIAN/WeType-Audio-Guard/issues) · [正式下载](DOWNLOAD.md)

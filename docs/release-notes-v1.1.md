@@ -46,3 +46,16 @@
 及 [第三方许可声明](https://github.com/DearJIAN/WeType-Audio-Guard/blob/v1.1/THIRD_PARTY_NOTICES.md)。
 
 原创的小鲸鱼图标由作者与未婚妻「鲸鲸」共同构思，愿它守护每一段不该突然消失的声音。🐳💙
+
+
+## Code signing policy（代码签名政策）和隐私保护
+
+**SignPath Foundation 免费开源代码签名申请已于 2026-11-03 提交，但仍在审核。现有 v1.1 EXE 没有数字签名。**
+
+- [Code signing policy：签名方案、审核和人工批准职责](https://github.com/DearJIAN/WeType-Audio-Guard/blob/main/CODE_SIGNING_POLICY.md)
+- [Privacy policy：本地会话信息、日志与无自动上传说明](https://github.com/DearJIAN/WeType-Audio-Guard/blob/main/PRIVACY.md)
+- [Download：正式下载页与未签名提示](https://github.com/DearJIAN/WeType-Audio-Guard/blob/main/DOWNLOAD.md)
+
+**仅在申请获批后适用的拟申请服务：Free code signing provided by SignPath.io, certificate by SignPath Foundation。** 这不是已获认证或现有 EXE 已签名的声明；正式 v1.1 附件和标签不会被修改。
+
+**EXE 实机验证已完成**：作者已在真实 Windows 运行打包后的 EXE，验证微信输入法语音输入期间实际恢复声音，且之前的工作进程超时故障没有再次发生。此现场结果独立于 46 项自动化测试。
