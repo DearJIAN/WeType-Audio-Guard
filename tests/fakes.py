@@ -53,3 +53,9 @@ def native_paused_probe(connection, directory):
         code=wetype_audio_tray.main()
     connection.send((code,observations))
     connection.close()
+
+class SlowAudio:
+    """An intentionally slow but responsive Windows-audio stand-in."""
+    def snapshot(self):
+        time.sleep(3.6)
+        return False, {}, ('fake-mic', 'fake-output')

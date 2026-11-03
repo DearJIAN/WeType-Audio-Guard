@@ -9,7 +9,7 @@ import time
 import unittest
 import uuid
 from unittest.mock import patch
-from tests.fakes import QuietAudio, HungAudio, BrokenAudio
+from tests.fakes import QuietAudio, HungAudio, BrokenAudio, SlowAudio
 from tray_runtime import TrayController
 try:
     from tray_platform import SingleInstance, cli_protect_running, configure_logging
@@ -188,3 +188,27 @@ class StatusNotificationTests(unittest.TestCase):
         controller._notify_if_changed()
         controller._notify_if_changed()
         self.assertEqual(len(calls), 2)
+
+class SlowAudioWatchdogTests(unittest.TestCase):
+    def test_default_watchdog_allows_realistic_slow_but_live_scans(self):
+        # Previous default 3.0s incorrectly terminated a responsive worker.
+        c = TrayController(factory=SlowAudio, interval=.02,
+                           conflict_check=lambda: False)
+        self.addCleanup(c.close)
+        self.assertGreaterEqual(c.timeout, 10.0)
+        c.start()
+        c.set_enabled(True)
+        wait_for(lambda: not c.snapshot()['pending'] and
+                 c.snapshot()['enabled'], timeout=9)
+        # An entire snapshot takes >3s, but must not be treated as a crash.
+        time.sleep(3.9)
+        self.assertFalse(c._failed.is_set())
+        self.assertTrue(c._thread.is_alive())
+        self.assertTrue(c.snapshot()['enabled'])
+        c.set_enabled(False)
+        wait_for(lambda: not c.snapshot()['pending'] and
+                 not c.snapshot()['enabled'], timeout=12)
+        self.assertFalse(c._failed.is_set())
+        c.close()
+        self.assertFalse(c._thread.is_alive())
+        self.assertIsNone(c._process)

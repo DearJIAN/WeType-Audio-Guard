@@ -28,6 +28,7 @@ class GuardEngine:
         self.conflict_check = conflict_check
         self._last_error = None
         self._last_error_time = 0.0
+        self._last_slow_snapshot_warning = 0.0
 
     def reset(self):
         self.policy = GuardPolicy()
@@ -57,7 +58,14 @@ class GuardEngine:
 
     def poll(self, audio, now, allowed=lambda: True):
         try:
+            scan_started = time.monotonic()
             recording, items, topology = audio.snapshot()
+            scan_seconds = time.monotonic() - scan_started
+            if (scan_seconds >= 1.0 and
+                    scan_started - self._last_slow_snapshot_warning >= 15.0):
+                # Deliberately omit process names, device IDs and raw exceptions.
+                LOG.warning('Slow Windows audio snapshot: %.2fs', scan_seconds)
+                self._last_slow_snapshot_warning = scan_started
             if not allowed():
                 return self.status()
             if recording != self.recording:
@@ -81,12 +89,21 @@ class GuardEngine:
             for item in candidates:
                 if not allowed():
                     break
-                if self.conflict_check():
+                check_started = time.monotonic()
+                conflict = self.conflict_check()
+                if time.monotonic() - check_started >= 1.0:
+                    LOG.warning('Slow CLI conflict inspection: %.2fs',
+                                time.monotonic() - check_started)
+                if conflict:
                     self.enabled = False
                     self.fault('cli-conflict')
                     break
                 try:
+                    restore_started = time.monotonic()
                     item.controller.SetMute(0, None)
+                    restore_seconds = time.monotonic() - restore_started
+                    if restore_seconds >= 1.0:
+                        LOG.warning('Slow audio mute restore call: %.2fs', restore_seconds)
                     self.restored += 1
                     # No labels: these may contain paths, device IDs and PIDs.
                     LOG.info('Playback mute restored; total=%d', self.restored)
@@ -239,7 +256,7 @@ def _audio_child(connection, factory, interval, log_dir):
 
 class TrayController:
     """One supervisor thread, one contained audio process, non-blocking UI commands."""
-    def __init__(self, factory=None, interval=.2, timeout=3.0, log_dir=None,
+    def __init__(self, factory=None, interval=.2, timeout=12.0, log_dir=None,
                  conflict_check=None):
         from tray_platform import cli_protect_running
         self.factory, self.interval, self.timeout, self.log_dir = factory, interval, timeout, log_dir
@@ -349,8 +366,17 @@ class TrayController:
                             if self._state['error'] == 'cli-conflict' and not state['enabled']:
                                 state['error'] = 'cli-conflict'
                             self._state.update(state, pending=False)
-                if not process.is_alive() or time.monotonic() - last_reply > self.timeout:
-                    raise TimeoutError('Audio worker unavailable')
+                # Real Windows Core Audio enumeration may take several seconds
+                # during WeType's session transitions. Do not confuse a slow
+                # but functioning COM operation with a dead worker.
+                if not process.is_alive():
+                    LOG.error('Audio worker exited; exit code=%s', process.exitcode)
+                    raise RuntimeError('Audio worker exited')
+                elapsed = time.monotonic() - last_reply
+                if elapsed > self.timeout:
+                    LOG.error('Audio worker heartbeat late: %.2fs (limit %.1fs)',
+                              elapsed, self.timeout)
+                    raise TimeoutError('Audio worker heartbeat expired')
                 self._notify_if_changed()
                 self._closing.wait(.03)
         except Exception:
