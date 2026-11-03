@@ -1,0 +1,49 @@
+name: Keep v1.1 Release description in sync
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/release-notes-v1.1.md
+      - .github/workflows/sync-release-notes.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-v1_1-description-only:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout source and policy
+        uses: actions/checkout@v4
+
+      - name: Check release policy disclosure
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(tr -d '\r\n' < VERSION)" = "1.1"
+          test -f CODE_SIGNING_POLICY.md
+          test -f PRIVACY.md
+          test -f DOWNLOAD.md
+          grep -q 'Code signing policy' docs/release-notes-v1.1.md
+          grep -q 'SignPath Foundation' docs/release-notes-v1.1.md
+          grep -q '未签名' docs/release-notes-v1.1.md
+          grep -q 'EXE' docs/release-notes-v1.1.md
+
+      - name: Edit description only; leave EXE, ZIP and tag untouched
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="v1.1"
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json tagName >/dev/null
+          before="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '[.assets[].name] | sort | join(",")')"
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes-file docs/release-notes-v1.1.md
+          after="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '[.assets[].name] | sort | join(",")')"
+          test "$before" = "$after"
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json body --jq .body | grep -q 'Code signing policy'
+          echo "v1.1 Release description updated; assets unchanged."
