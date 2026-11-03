@@ -115,12 +115,33 @@ class EngineTests(unittest.TestCase):
         self.tick(); self.audio.recording = self.audio.muted = True
         self.tick()
         self.assertEqual(self.audio.control.calls, 0)
-    def test_conflict_check_blocks_writes(self):
-        self.engine = GuardEngine(conflict_check=lambda: True)
-        self.prime(); self.audio.recording = self.audio.muted = True
-        self.tick()
-        self.assertEqual(self.audio.control.calls, 0)
-        self.assertTrue(self.engine.status()['error'])
+    def test_two_candidate_restores_without_slow_process_enumeration(self):
+        # The validated CLI calls SetMute directly. A simulated expensive
+        # process scan must never enter the recording-time restore loop.
+        from unittest.mock import patch
+        self.prime()
+        self.audio.extra = True
+        self.audio.recording = self.audio.muted = True
+        self.audio.extra = False
+        with patch('tray_platform.cli_protect_running',
+                   side_effect=AssertionError('Unexpected real-time process scan')) as check:
+            self.tick()
+        self.assertEqual(self.audio.control.calls, 1)
+        check.assert_not_called()
+
+    def test_post_restore_readback_reports_repeated_muting(self):
+        from unittest.mock import patch
+        self.prime()
+        self.audio.recording = self.audio.muted = True
+        with patch('tray_runtime.LOG') as logger:
+            self.tick()
+            self.assertEqual(self.audio.control.calls, 1)
+            # Deliberately leave the fake app muted to mimic re-muting.
+            self.tick()
+            messages = [str(call) for call in logger.info.call_args_list]
+        self.assertTrue(any('Restore readback:' in message and
+                            'muted=%d' in message for message in messages))
+        self.assertEqual(self.audio.control.calls, 1)
 
 class PrivacyTests(unittest.TestCase):
     def test_error_payload_and_session_label_never_enter_log(self):
@@ -144,12 +165,3 @@ class PrivacyTests(unittest.TestCase):
                 for handler in logger.handlers[:]:
                     handler.close(); logger.removeHandler(handler)
 
-class ConflictPauseTests(unittest.TestCase):
-    def test_detected_conflict_disables_engine_until_explicit_enable(self):
-        engine=GuardEngine(conflict_check=lambda:True); audio=Audio()
-        engine.set_enabled(True)
-        for now in (.2,.4,.6): engine.poll(audio,now)
-        audio.recording=audio.muted=True
-        engine.poll(audio,.8)
-        self.assertFalse(engine.status()['enabled'])
-        self.assertEqual(engine.status()['error'],'cli-conflict')

@@ -17,7 +17,7 @@ LOG.addHandler(logging.NullHandler())
 
 class GuardEngine:
     """Value state only; all methods run on the owning audio thread."""
-    def __init__(self, conflict_check=lambda: False):
+    def __init__(self):
         self.enabled = False
         self.recording = None
         self.restored = 0
@@ -25,15 +25,18 @@ class GuardEngine:
         self.policy = GuardPolicy()
         self.topology = None
         self.idle_keys = None
-        self.conflict_check = conflict_check
+        # Expensive CLI process inspection belongs to the supervisor at enable-time,
+        # never to the latency-sensitive audio restoration loop.
         self._last_error = None
         self._last_error_time = 0.0
         self._last_slow_snapshot_warning = 0.0
+        self._pending_readback = set()
 
     def reset(self):
         self.policy = GuardPolicy()
         self.topology = None
         self.idle_keys = None
+        self._pending_readback.clear()
 
     def set_enabled(self, enabled):
         self.enabled = bool(enabled)
@@ -68,6 +71,16 @@ class GuardEngine:
                 self._last_slow_snapshot_warning = scan_started
             if not allowed():
                 return self.status()
+            # Confirm the outcome on the next existing snapshot, without
+            # calling Windows audio APIs again on the critical restore path.
+            if self._pending_readback:
+                pending = self._pending_readback
+                still_muted = sum(k in items and items[k].muted for k in pending)
+                now_unmuted = sum(k in items and not items[k].muted for k in pending)
+                missing = len(pending) - still_muted - now_unmuted
+                LOG.info('Restore readback: unmuted=%d muted=%d missing=%d recording=%s',
+                         now_unmuted, still_muted, missing, 'ON' if recording else 'OFF')
+                self._pending_readback = set()
             if recording != self.recording:
                 LOG.info('WeType recording %s', 'ON' if recording else 'OFF')
             self.recording = recording
@@ -89,15 +102,10 @@ class GuardEngine:
             for item in candidates:
                 if not allowed():
                     break
-                check_started = time.monotonic()
-                conflict = self.conflict_check()
-                if time.monotonic() - check_started >= 1.0:
-                    LOG.warning('Slow CLI conflict inspection: %.2fs',
-                                time.monotonic() - check_started)
-                if conflict:
-                    self.enabled = False
-                    self.fault('cli-conflict')
-                    break
+                # No psutil/process enumeration here: it was observed taking
+                # ~2 seconds per candidate on a real Windows desktop.
+                # The supervisor checks for incompatible CLI protection before
+                # accepting an explicit enable request.
                 try:
                     restore_started = time.monotonic()
                     item.controller.SetMute(0, None)
@@ -105,8 +113,12 @@ class GuardEngine:
                     if restore_seconds >= 1.0:
                         LOG.warning('Slow audio mute restore call: %.2fs', restore_seconds)
                     self.restored += 1
+                    self._pending_readback.add(item.key)
+                    age = (time.monotonic() - self.policy.active_since
+                           if self.policy.active_since is not None else 0.0)
                     # No labels: these may contain paths, device IDs and PIDs.
-                    LOG.info('Playback mute restored; total=%d', self.restored)
+                    LOG.info('Playback mute restored; total=%d, delay_since_detect=%.2fs',
+                             self.restored, age)
                 except Exception:
                     self.error = 'restore-failed'
                     LOG.warning('Playback restore failed; no retry this recording')
@@ -207,10 +219,10 @@ class StrictWindowsAudio(WindowsAudio):
 
 def _audio_child(connection, factory, interval, log_dir):
     """Spawn target: this process's main thread is the sole COM/audio owner."""
-    from tray_platform import cli_protect_running, configure_logging
+    from tray_platform import configure_logging
     if log_dir:
         configure_logging(log_dir, role='audio')
-    engine = GuardEngine(conflict_check=cli_protect_running)
+    engine = GuardEngine()
     audio = None
     revision = 0
     def release():

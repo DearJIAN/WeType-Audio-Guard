@@ -79,3 +79,27 @@ python tools\preview_tray_icons.py
 如再次报错，应先对照 `audio.log` 中 `Slow Windows audio snapshot`、
 `Slow CLI conflict inspection`、`Slow audio mute restore call` 和 `tray.log`
 中的心跳超时。不要仅靠不断增加超时掩盖真正卡死。
+
+## 2026-11-03：录音后仍无声音的第二轮调查
+
+真实测试显示：延长 watchdog 后不再报错，但音频日志在每次候选恢复前出现
+`Slow CLI conflict inspection: 2.08s` 和 `2.06s`。这证明每个候选
+`SetMute(0, None)` 前重复执行 Windows 进程遍历，导致约 4 秒以上额外延迟。
+两个 `Playback mute restored` 日志只代表 SetMute 没有抛异常，并不保证
+微信输入法录音期间播放会话持续解除静音。
+
+本轮修复：
+
+- 保留原 `wetype_audio_guard.py` 和 `GuardPolicy`；**录音期间的恢复循环不再执行进程扫描**，恢复动作与最初验证成功的 CLI 接近。
+- 仅在用户手动启用保护时由 UI 监督线程执行 CLI 冲突检测；不对
+  已经进入音频恢复窗口的候选再次执行昂贵的检查。仍需遵守
+  **不要同时运行 CLI 和托盘**的约定，检查并不提供双向强互斥。
+- 恢复成功后**下一轮已有音频快照**读取相同会话的静音状态，
+  脱敏记录 `Restore readback: unmuted=N muted=N missing=N recording=ON/OFF`。
+  不增加 SetMute 前额外 COM 调用，不重复解除原本有意静音的应用。
+- 记录 `delay_since_detect`，帮助确认音频恢复是否及时。
+- 新增回归测试，证明每次录音的候选恢复不再触发进程遍历，
+  并观察恢复后被再次静音的情况。
+
+本轮仍属于独立测试分支，不修改正式 `main`、`v1.0.1` Release。
+必须以 Windows 真实录音测试结果判断修复是否有效。

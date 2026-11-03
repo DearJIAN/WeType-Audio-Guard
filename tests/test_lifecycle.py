@@ -212,3 +212,20 @@ class SlowAudioWatchdogTests(unittest.TestCase):
         c.close()
         self.assertFalse(c._thread.is_alive())
         self.assertIsNone(c._process)
+
+class ExplicitEnableConflictTests(unittest.TestCase):
+    def test_cli_conflict_prevents_enable_without_audio_writes(self):
+        checks = []
+        def blocked():
+            checks.append(True)
+            return True
+        c = TrayController(factory=QuietAudio, interval=.02,
+                           timeout=2.0, conflict_check=blocked)
+        self.addCleanup(c.close)
+        c.start()
+        c.set_enabled(True)
+        wait_for(lambda: not c.snapshot()['pending'], timeout=6)
+        self.assertFalse(c.snapshot()['enabled'])
+        self.assertEqual(c.snapshot()['error'], 'cli-conflict')
+        self.assertGreaterEqual(len(checks), 1)
+
